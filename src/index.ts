@@ -1,4 +1,4 @@
-import { AxiosInstance, AxiosResponse, AxiosPromise } from 'axios';
+import { XiorInstance, XiorResponse } from 'xior';
 import { AxiosAuthRefreshOptions, AxiosAuthRefreshCache } from './model';
 import {
     unsetCache,
@@ -29,10 +29,10 @@ export { AxiosAuthRefreshOptions, AxiosAuthRefreshRequestConfig } from './model'
  * @return {number} - interceptor id (in case you want to eject it manually)
  */
 export default function createAuthRefreshInterceptor(
-    instance: AxiosInstance,
+    instance: XiorInstance,
     refreshAuthCall: (error: any) => Promise<any>,
     options: AxiosAuthRefreshOptions = {}
-): number {
+): any {
     if (typeof refreshAuthCall !== 'function') {
         throw new Error('axios-auth-refresh requires `refreshAuthCall` to be a function that returns a promise.');
     }
@@ -44,7 +44,7 @@ export default function createAuthRefreshInterceptor(
     };
 
     return instance.interceptors.response.use(
-        (response: AxiosResponse) => response,
+        (response: any) => response,
         (error: any) => {
             options = mergeOptions(defaultOptions, options);
 

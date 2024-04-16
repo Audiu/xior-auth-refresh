@@ -28,11 +28,11 @@
         "prepare": "husky install"
     },
     "peerDependencies": {
-        "axios": ">= 0.18 < 0.19.0 || >= 0.19.1"
+        "xior": "^0.3.12"
     },
     "devDependencies": {
         "@types/jest": "^28.1.6",
-        "axios": "^1.2.2",
+        "xior": "^0.3.12",
         "babel-loader": "^9.1.0",
         "clean-webpack-plugin": "^4.0.0",
         "declaration-bundler-webpack-plugin": "^1.0.3",
