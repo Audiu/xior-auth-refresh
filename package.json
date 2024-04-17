@@ -1,5 +1,5 @@
 {
-    "name": "@mgoodfellow/xior-auth-refresh",
+    "name": "xior-auth-refresh",
     "version": "0.0.1",
     "description": "Xior plugin which makes it very easy to automatically refresh the authorization tokens of your clients",
     "keywords": [
@@ -13,17 +13,18 @@
     ],
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/mgoodfellow/xior-auth-refresh.git"
+        "url": "git+https://github.com/Audiu/xior-auth-refresh.git"
     },
-    "publishConfig": {
-        "registry": "https://npm.pkg.github.com"
+    "bugs": {
+        "url": "https://github.com/Audiu/xior-auth-refresh/issues"
     },
+    "homepage": "https://github.com/Audiu/xior-auth-refresh#readme",
     "main": "dist/index.min.js",
     "types": "dist/index.d.ts",
     "author": "Dawid Zbiński <dawid@zbinski.eu>",
     "contributors": [
         "Dawid Zbiński <dawid@zbinski.eu>",
-        "Mike Goodfellow"
+        "Mike Goodfellow <mg.npm.email@gmail.com>"
     ],
     "license": "MIT",
     "private": false,
