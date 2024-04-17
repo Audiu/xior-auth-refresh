@@ -1,9 +1,5 @@
-import xior, { XiorInstance, XiorRequestConfig } from 'xior';
+import { XiorInstance } from 'xior';
 import { XiorAuthRefreshOptions, XiorAuthRefreshCache } from './model';
-
-export interface CustomXiorRequestConfig extends XiorRequestConfig {
-    skipAuthRefresh?: boolean;
-}
 
 export const defaultOptions: XiorAuthRefreshOptions = {
     statusCodes: [401],

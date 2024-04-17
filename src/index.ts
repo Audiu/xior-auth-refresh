@@ -13,6 +13,12 @@ import {
 
 export { XiorAuthRefreshOptions, XiorAuthRefreshRequestConfig } from './model';
 
+declare module 'xior' {
+    interface XiorRequestConfig {
+        skipAuthRefresh?: boolean;
+    }
+}
+
 /**
  * Creates an authentication refresh interceptor that binds to any error response.
  * If the response status code is one of the options.statusCodes, interceptor calls the refreshAuthCall
@@ -30,7 +36,7 @@ export { XiorAuthRefreshOptions, XiorAuthRefreshRequestConfig } from './model';
  */
 export default function createAuthRefreshInterceptor(
     instance: XiorInstance,
-    refreshAuthCall: (error: any) => Promise<any>,
+    refreshAuthCall: (error: any) => Promise<XiorResponse> | Promise<void>,
     options: XiorAuthRefreshOptions = {}
 ): any {
     if (typeof refreshAuthCall !== 'function') {

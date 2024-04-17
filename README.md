@@ -88,12 +88,6 @@ To do this, you need to pass the `skipAuthRefresh` option to the request config 
 xior.get('https://www.example.com/', { skipAuthRefresh: true });
 ```
 
-If you're using TypeScript you can import the custom request config interface from `xior-auth-refresh`.
-
-```typescript
-import { XiorAuthRefreshRequestConfig } from 'xior-auth-refresh';
-```
-
 #### Request interceptor
 
 Since this plugin automatically stalls additional requests while refreshing the token,
