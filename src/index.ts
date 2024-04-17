@@ -1,5 +1,5 @@
-import { AxiosInstance, AxiosResponse, AxiosPromise } from 'axios';
-import { AxiosAuthRefreshOptions, AxiosAuthRefreshCache } from './model';
+import { XiorInstance, XiorResponse } from 'xior';
+import { XiorAuthRefreshOptions, XiorAuthRefreshCache } from './model';
 import {
     unsetCache,
     mergeOptions,
@@ -11,7 +11,7 @@ import {
     createRequestQueueInterceptor,
 } from './utils';
 
-export { AxiosAuthRefreshOptions, AxiosAuthRefreshRequestConfig } from './model';
+export { XiorAuthRefreshOptions, XiorAuthRefreshRequestConfig } from './model';
 
 /**
  * Creates an authentication refresh interceptor that binds to any error response.
@@ -23,28 +23,28 @@ export { AxiosAuthRefreshOptions, AxiosAuthRefreshRequestConfig } from './model'
  * turned off, but use it with caution as you need to mark the requests with `skipAuthRefresh` flag yourself in order to
  * not run into interceptors loop.
  *
- * @param {AxiosInstance} instance - Axios HTTP client instance
- * @param {(error: any) => Promise<AxiosPromise>} refreshAuthCall - refresh token call which must return a Promise
- * @param {AxiosAuthRefreshOptions} options - options for the interceptor @see defaultOptions
- * @return {number} - interceptor id (in case you want to eject it manually)
+ * @param {XiorInstance} instance - Xior HTTP client instance
+ * @param {(error: any) => Promise<any>} refreshAuthCall - refresh token call which must return a Promise
+ * @param {XiorAuthRefreshOptions} options - options for the interceptor @see defaultOptions
+ * @return {func} - Anonymous interceptor function
  */
 export default function createAuthRefreshInterceptor(
-    instance: AxiosInstance,
+    instance: XiorInstance,
     refreshAuthCall: (error: any) => Promise<any>,
-    options: AxiosAuthRefreshOptions = {}
-): number {
+    options: XiorAuthRefreshOptions = {}
+): any {
     if (typeof refreshAuthCall !== 'function') {
-        throw new Error('axios-auth-refresh requires `refreshAuthCall` to be a function that returns a promise.');
+        throw new Error('xior-auth-refresh requires `refreshAuthCall` to be a function that returns a promise.');
     }
 
-    const cache: AxiosAuthRefreshCache = {
+    const cache: XiorAuthRefreshCache = {
         skipInstances: [],
         refreshCall: undefined,
         requestQueueInterceptorId: undefined,
     };
 
     return instance.interceptors.response.use(
-        (response: AxiosResponse) => response,
+        (response: any) => response,
         (error: any) => {
             options = mergeOptions(defaultOptions, options);
 

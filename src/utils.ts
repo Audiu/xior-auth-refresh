@@ -1,11 +1,11 @@
-import axios, { AxiosInstance, AxiosPromise, AxiosRequestConfig } from 'axios';
-import { AxiosAuthRefreshOptions, AxiosAuthRefreshCache } from './model';
+import xior, { XiorInstance, XiorRequestConfig } from 'xior';
+import { XiorAuthRefreshOptions, XiorAuthRefreshCache } from './model';
 
-export interface CustomAxiosRequestConfig extends AxiosRequestConfig {
+export interface CustomXiorRequestConfig extends XiorRequestConfig {
     skipAuthRefresh?: boolean;
 }
 
-export const defaultOptions: AxiosAuthRefreshOptions = {
+export const defaultOptions: XiorAuthRefreshOptions = {
     statusCodes: [401],
     pauseInstanceWhileRefreshing: false,
 };
@@ -13,12 +13,12 @@ export const defaultOptions: AxiosAuthRefreshOptions = {
 /**
  * Merges two options objects (options overwrites defaults).
  *
- * @return {AxiosAuthRefreshOptions}
+ * @return {XiorAuthRefreshOptions}
  */
 export function mergeOptions(
-    defaults: AxiosAuthRefreshOptions,
-    options: AxiosAuthRefreshOptions
-): AxiosAuthRefreshOptions {
+    defaults: XiorAuthRefreshOptions,
+    options: XiorAuthRefreshOptions
+): XiorAuthRefreshOptions {
     return {
         ...defaults,
         pauseInstanceWhileRefreshing: options.skipWhileRefreshing,
@@ -34,9 +34,9 @@ export function mergeOptions(
  */
 export function shouldInterceptError(
     error: any,
-    options: AxiosAuthRefreshOptions,
-    instance: AxiosInstance,
-    cache: AxiosAuthRefreshCache
+    options: XiorAuthRefreshOptions,
+    instance: XiorInstance,
+    cache: XiorAuthRefreshCache
 ): boolean {
     if (!error) {
         return false;
@@ -74,12 +74,12 @@ export function shouldInterceptError(
 export function createRefreshCall(
     error: any,
     fn: (error: any) => Promise<any>,
-    cache: AxiosAuthRefreshCache
+    cache: XiorAuthRefreshCache
 ): Promise<any> {
     if (!cache.refreshCall) {
         cache.refreshCall = fn(error);
         if (typeof cache.refreshCall.then !== 'function') {
-            console.warn('axios-auth-refresh requires `refreshTokenCall` to return a promise.');
+            console.warn('xior-auth-refresh requires `refreshTokenCall` to return a promise.');
             return Promise.reject();
         }
     }
@@ -92,15 +92,16 @@ export function createRefreshCall(
  * @return {number}
  */
 export function createRequestQueueInterceptor(
-    instance: AxiosInstance,
-    cache: AxiosAuthRefreshCache,
-    options: AxiosAuthRefreshOptions
+    instance: XiorInstance,
+    cache: XiorAuthRefreshCache,
+    options: XiorAuthRefreshOptions
 ): number {
     if (typeof cache.requestQueueInterceptorId === 'undefined') {
-        cache.requestQueueInterceptorId = instance.interceptors.request.use((request: CustomAxiosRequestConfig) => {
+        cache.requestQueueInterceptorId = instance.interceptors.request.use((request: any) => {
             return cache.refreshCall
                 .catch(() => {
-                    throw new axios.Cancel('Request call failed');
+                    //throw new xior.Cancel('Request call failed');
+                    throw new Error('Request call failed');
                 })
                 .then(() => (options.onRetry ? options.onRetry(request) : request));
         });
@@ -111,10 +112,10 @@ export function createRequestQueueInterceptor(
 /**
  * Ejects request queue interceptor and unset interceptor cached values.
  *
- * @param {AxiosInstance} instance
- * @param {AxiosAuthRefreshCache} cache
+ * @param {XiorInstance} instance
+ * @param {XiorAuthRefreshCache} cache
  */
-export function unsetCache(instance: AxiosInstance, cache: AxiosAuthRefreshCache): void {
+export function unsetCache(instance: XiorInstance, cache: XiorAuthRefreshCache): void {
     instance.interceptors.request.eject(cache.requestQueueInterceptorId);
     cache.requestQueueInterceptorId = undefined;
     cache.refreshCall = undefined;
@@ -127,18 +128,18 @@ export function unsetCache(instance: AxiosInstance, cache: AxiosAuthRefreshCache
  * @param instance
  * @param options
  */
-export function getRetryInstance(instance: AxiosInstance, options: AxiosAuthRefreshOptions): AxiosInstance {
+export function getRetryInstance(instance: XiorInstance, options: XiorAuthRefreshOptions): XiorInstance {
     return options.retryInstance || instance;
 }
 
 /**
- * Resend failed axios request.
+ * Resend failed xior request.
  *
  * @param {any} error
- * @param {AxiosInstance} instance
- * @return AxiosPromise
+ * @param {XiorInstance} instance
+ * @return Promise<any>
  */
-export function resendFailedRequest(error: any, instance: AxiosInstance): AxiosPromise {
+export function resendFailedRequest(error: any, instance: XiorInstance): Promise<any> {
     error.config.skipAuthRefresh = true;
-    return instance(error.response.config);
+    return instance.request(error.response.config);
 }

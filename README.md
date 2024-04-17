@@ -1,12 +1,14 @@
-![Package version](https://img.shields.io/npm/v/axios-auth-refresh?label=version)
-![Package size](https://img.shields.io/bundlephobia/min/axios-auth-refresh)
-![Package downloads](https://img.shields.io/npm/dm/axios-auth-refresh)
-![Package types definitions](https://img.shields.io/npm/types/axios-auth-refresh)
+![Package version](https://img.shields.io/npm/v/xior-auth-refresh?label=version)
+![Package size](https://img.shields.io/bundlephobia/min/xior-auth-refresh)
+![Package downloads](https://img.shields.io/npm/dm/xior-auth-refresh)
+![Package types definitions](https://img.shields.io/npm/types/xior-auth-refresh)
 
-# axios-auth-refresh
+# xior-auth-refresh
+
+This library is a fork of the brilliant [axios-auth-refresh](https://github.com/Flyrell/axios-auth-refresh) library by Dawid Zbiński.
 
 Library that helps you implement automatic refresh of authorization
-via axios [interceptors](https://github.com/axios/axios#interceptors).
+via xior [interceptors](https://github.com/suhaotian/xior?tab=readme-ov-file#using-interceptors).
 You can easily intercept the original request when it fails, refresh the authorization and continue with the original request,
 without any user interaction.
 
@@ -21,79 +23,75 @@ and resolves them when a new token is available.
 Using [npm](https://www.npmjs.com/get-npm) or [yarn](https://yarnpkg.com/en/docs/install):
 
 ```bash
-npm install axios-auth-refresh --save
+npm install xior-auth-refresh --save
 # or
-yarn add axios-auth-refresh
+yarn add xior-auth-refresh
 ```
 
 ## Syntax
 
 ```typescript
 createAuthRefreshInterceptor(
-    axios: AxiosInstance,
+    xior: XiorInstance,
     refreshAuthLogic: (failedRequest: any) => Promise<any>,
-    options: AxiosAuthRefreshOptions = {}
+    options: XiorAuthRefreshOptions = {}
 ): number;
 ```
 
 #### Parameters
 
--   `axios` - an instance of Axios
+-   `xior` - an instance of Xior
 -   `refreshAuthLogic` - a Function used for refreshing authorization (**must return a promise**).
     Accepts exactly one parameter, which is the `failedRequest` returned by the original call.
 -   `options` - object with settings for interceptor (See [available options](#available-options))
 
 #### Returns
 
-Interceptor `id` in case you want to reject it manually.
+Interceptor anonymous function.
 
 ## Usage
 
-In order to activate the interceptors, you need to import a function from `axios-auth-refresh`
-which is _exported by default_ and call it with the **axios instance** you want the interceptors for,
+In order to activate the interceptors, you need to import a function from `xiorf-auth-refresh`
+which is _exported by default_ and call it with the **xior instance** you want the interceptors for,
 as well as the **refresh authorization function** where you need to write the logic for refreshing the authorization.
 
-The interceptors will then be bound onto the axios instance, and the specified logic will be run whenever a [401 (Unauthorized)](https://httpstatuses.com/401) status code
+The interceptors will then be bound onto the xior instance, and the specified logic will be run whenever a [401 (Unauthorized)](https://httpstatuses.com/401) status code
 is returned from a server (or any other status code you provide in options). All the new requests created while the refreshAuthLogic has been processing will be bound onto the
 Promise returned from the refreshAuthLogic function. This means that the requests will be resolved when a new access token has been fetched or when the refreshing logic failed.
 
 ```javascript
-import axios from 'axios';
-import createAuthRefreshInterceptor from 'axios-auth-refresh';
+import xior from 'xior';
+import createAuthRefreshInterceptor from 'xior-auth-refresh';
 
 // Function that will be called to refresh authorization
 const refreshAuthLogic = (failedRequest) =>
-    axios.post('https://www.example.com/auth/token/refresh').then((tokenRefreshResponse) => {
+    xior.post('https://www.example.com/auth/token/refresh').then((tokenRefreshResponse) => {
         localStorage.setItem('token', tokenRefreshResponse.data.token);
         failedRequest.response.config.headers['Authorization'] = 'Bearer ' + tokenRefreshResponse.data.token;
         return Promise.resolve();
     });
 
 // Instantiate the interceptor
-createAuthRefreshInterceptor(axios, refreshAuthLogic);
+createAuthRefreshInterceptor(xior, refreshAuthLogic);
 
 // Make a call. If it returns a 401 error, the refreshAuthLogic will be run,
 // and the request retried with the new token
-axios.get('https://www.example.com/restricted/area').then(/* ... */).catch(/* ... */);
+xior.get('https://www.example.com/restricted/area').then(/* ... */).catch(/* ... */);
 ```
 
 #### Skipping the interceptor
-
-:warning: Because of the bug [axios#2295](https://github.com/axios/axios/issues/2295) v0.19.0 is not supported. :warning:
-
-:white_check_mark: This has been fixed and will be released in axios v0.19.1
 
 There's a possibility to skip the logic of the interceptor for specific calls.
 To do this, you need to pass the `skipAuthRefresh` option to the request config for each request you don't want to intercept.
 
 ```javascript
-axios.get('https://www.example.com/', { skipAuthRefresh: true });
+xior.get('https://www.example.com/', { skipAuthRefresh: true });
 ```
 
-If you're using TypeScript you can import the custom request config interface from `axios-auth-refresh`.
+If you're using TypeScript you can import the custom request config interface from `xior-auth-refresh`.
 
 ```typescript
-import { AxiosAuthRefreshRequestConfig } from 'axios-auth-refresh';
+import { XiorAuthRefreshRequestConfig } from 'xior-auth-refresh';
 ```
 
 #### Request interceptor
@@ -111,7 +109,7 @@ function getAccessToken() {
 }
 
 // Use interceptor to inject the token to requests
-axios.interceptors.request.use((request) => {
+xior.interceptors.request.use((request) => {
     request.headers['Authorization'] = `Bearer ${getAccessToken()}`;
     return request;
 });
@@ -147,7 +145,7 @@ Default value is `undefined` and the instance passed to `createAuthRefreshInterc
 
 ```javascript
 {
-    retryInstance: someAxiosInstance, // default: undefined
+    retryInstance: someXiorInstance, // default: undefined
 }
 ```
 
@@ -172,7 +170,7 @@ codes specified in `options.statusCodes`) you need to use a [`skipAuthRefresh`](
 flag on your refreshing call inside the `refreshAuthLogic` function.
 
 In case your refresh logic does not make any calls, you should consider using the following flag
-when initializing the interceptor to pause the whole axios instance while the refreshing is pending.
+when initializing the interceptor to pause the whole xior instance while the refreshing is pending.
 This prevents interceptor from running for each failed request.
 
 ```javascript
@@ -196,37 +194,3 @@ with an HTTP 401 response, your retry logic can test for network connectivity at
     interceptNetworkError: true, // default: undefined
 }
 ```
-
-### Other usages of the library
-
-This library has also been used for:
-
--   Automatic request throttling by [@amcsi](https://github.com/amcsi)
--   OTP challenges with Google2FA by [@LeoniePhiline](https://github.com/LeoniePhiline)
-
-have you used it for something else? Create a PR with your use case to share it.
-
----
-
-### Changelog
-
--   **v3.1.0**
-
-    -   axios v0.21.1 support
-    -   `interceptNetworkError` option introduced. See [#133](https://github.com/Flyrell/axios-auth-refresh/issues/133).
-
--   **v3.0.0**
-    -   `skipWhileRefresh` flag has been deprecated due to its unclear name and its logic has been moved to `pauseInstanceWhileRefreshing` flag
-    -   `pauseInstanceWhileRefreshing` is set to `false` by default
-
----
-
-#### Want to help?
-
-Check out [contribution guide](CONTRIBUTING.md) or my [patreon page!](https://www.patreon.com/dawidzbinski)
-
----
-
-#### Special thanks to [JetBrains](https://www.jetbrains.com/?from=axios-auth-refresh) for providing the IDE for our library
-
-<a href="https://www.jetbrains.com/?from=axios-auth-refresh" title="Link to JetBrains"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/JetBrains_Logo_2016.svg/128px-JetBrains_Logo_2016.svg.png" alt="JetBrains"></a>

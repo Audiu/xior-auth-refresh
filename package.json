@@ -1,9 +1,9 @@
 {
-    "name": "axios-auth-refresh",
-    "version": "3.3.6",
-    "description": "Axios plugin which makes it very easy to automatically refresh the authorization tokens of your clients",
+    "name": "@mgoodfellow/xior-auth-refresh",
+    "version": "0.0.1",
+    "description": "Xior plugin which makes it very easy to automatically refresh the authorization tokens of your clients",
     "keywords": [
-        "axios",
+        "xior",
         "authentication",
         "authorization",
         "refresh token",
@@ -11,10 +11,20 @@
         "interceptor",
         "auto refresh"
     ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/mgoodfellow/xior-auth-refresh.git"
+    },
+    "publishConfig": {
+        "registry": "https://npm.pkg.github.com"
+    },
     "main": "dist/index.min.js",
     "types": "dist/index.d.ts",
-    "repository": "https://github.com/Flyrell/axios-auth-refresh",
     "author": "Dawid Zbiński <dawid@zbinski.eu>",
+    "contributors": [
+        "Dawid Zbiński <dawid@zbinski.eu>",
+        "Mike Goodfellow"
+    ],
     "license": "MIT",
     "private": false,
     "scripts": {
@@ -28,11 +38,11 @@
         "prepare": "husky install"
     },
     "peerDependencies": {
-        "axios": ">= 0.18 < 0.19.0 || >= 0.19.1"
+        "xior": "^0.3.12"
     },
     "devDependencies": {
         "@types/jest": "^28.1.6",
-        "axios": "^1.2.2",
+        "xior": "^0.3.12",
         "babel-loader": "^9.1.0",
         "clean-webpack-plugin": "^4.0.0",
         "declaration-bundler-webpack-plugin": "^1.0.3",
