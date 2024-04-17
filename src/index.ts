@@ -13,7 +13,7 @@ import {
 
 export { XiorAuthRefreshOptions, XiorAuthRefreshRequestConfig } from './model';
 
-declare module 'xior' {
+export declare module xior {
     interface XiorRequestConfig {
         skipAuthRefresh?: boolean;
     }
