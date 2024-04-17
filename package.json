@@ -1,6 +1,6 @@
 {
     "name": "xior-auth-refresh",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "Xior plugin which makes it very easy to automatically refresh the authorization tokens of your clients",
     "keywords": [
         "xior",
