@@ -13,7 +13,7 @@
     ],
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/mgoodfellow/axios-auth-refresh.git"
+        "url": "git+https://github.com/mgoodfellow/xior-auth-refresh.git"
     },
     "publishConfig": {
         "registry": "https://npm.pkg.github.com"

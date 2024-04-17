@@ -1,10 +1,10 @@
 import { XiorError, XiorInstance, XiorRequestConfig } from 'xior';
 
-export interface AxiosAuthRefreshOptions {
+export interface XiorAuthRefreshOptions {
     statusCodes?: Array<number>;
     /**
      * Determine whether to refresh, if "shouldRefresh" is configured, The "statusCodes" logic will be ignored
-     * @param error AxiosError
+     * @param error XiorError
      * @returns boolean
      */
     shouldRefresh?(error: XiorError): boolean;
@@ -21,12 +21,12 @@ export interface AxiosAuthRefreshOptions {
     skipWhileRefreshing?: boolean;
 }
 
-export interface AxiosAuthRefreshCache {
+export interface XiorAuthRefreshCache {
     skipInstances: XiorInstance[];
     refreshCall: Promise<any> | undefined;
     requestQueueInterceptorId: any;
 }
 
-export interface AxiosAuthRefreshRequestConfig extends XiorRequestConfig {
+export interface XiorAuthRefreshRequestConfig extends XiorRequestConfig {
     skipAuthRefresh?: boolean;
 }

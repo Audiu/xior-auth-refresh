@@ -1,6 +1,6 @@
-import { AxiosAuthRefreshCache, AxiosAuthRefreshRequestConfig } from '../model';
+import { XiorAuthRefreshCache, XiorAuthRefreshRequestConfig } from '../model';
 import xior, { XiorRequestConfig } from 'xior';
-import createAuthRefreshInterceptor, { AxiosAuthRefreshOptions } from '../index';
+import createAuthRefreshInterceptor, { XiorAuthRefreshOptions } from '../index';
 import {
     unsetCache,
     mergeOptions,
@@ -11,7 +11,7 @@ import {
     createRequestQueueInterceptor,
 } from '../utils';
 
-const mockedAxios: () => any = () => {
+const mockedXior: () => any = () => {
     const bag = {
         request: [],
         response: [],
@@ -58,26 +58,26 @@ const sleep = (ms) => {
 
 describe('Merges configs', () => {
     it('source and target are the same', () => {
-        const source: AxiosAuthRefreshOptions = { statusCodes: [204] };
-        const target: AxiosAuthRefreshOptions = { statusCodes: [204] };
+        const source: XiorAuthRefreshOptions = { statusCodes: [204] };
+        const target: XiorAuthRefreshOptions = { statusCodes: [204] };
         expect(mergeOptions(target, source)).toEqual({ statusCodes: [204] });
     });
 
     it('source is different than the target', () => {
-        const source: AxiosAuthRefreshOptions = { statusCodes: [302] };
-        const target: AxiosAuthRefreshOptions = { statusCodes: [204] };
+        const source: XiorAuthRefreshOptions = { statusCodes: [302] };
+        const target: XiorAuthRefreshOptions = { statusCodes: [204] };
         expect(mergeOptions(target, source)).toEqual({ statusCodes: [302] });
     });
 
     it('source is empty', () => {
-        const source: AxiosAuthRefreshOptions = {};
-        const target: AxiosAuthRefreshOptions = { statusCodes: [204] };
+        const source: XiorAuthRefreshOptions = {};
+        const target: XiorAuthRefreshOptions = { statusCodes: [204] };
         expect(mergeOptions(target, source)).toEqual({ statusCodes: [204] });
     });
 });
 
 describe('Determines if the response should be intercepted', () => {
-    let cache: AxiosAuthRefreshCache = undefined;
+    let cache: XiorAuthRefreshCache = undefined;
     beforeEach(() => {
         cache = {
             skipInstances: [],
@@ -156,7 +156,7 @@ describe('Determines if the response should be intercepted', () => {
         const error = {
             response: { status: 401 },
         };
-        const newOptions: AxiosAuthRefreshOptions = { ...options, shouldRefresh: () => true };
+        const newOptions: XiorAuthRefreshOptions = { ...options, shouldRefresh: () => true };
         expect(shouldInterceptError(error, newOptions, xior, cache)).toBeTruthy();
     });
 
@@ -164,13 +164,13 @@ describe('Determines if the response should be intercepted', () => {
         const error = {
             response: { status: 401 },
         };
-        const newOptions: AxiosAuthRefreshOptions = { ...options, shouldRefresh: () => false };
+        const newOptions: XiorAuthRefreshOptions = { ...options, shouldRefresh: () => false };
         expect(shouldInterceptError(error, newOptions, xior, cache)).toBeFalsy();
     });
 });
 
 describe('Creates refresh call', () => {
-    let cache: AxiosAuthRefreshCache = undefined;
+    let cache: XiorAuthRefreshCache = undefined;
     beforeEach(() => {
         cache = {
             skipInstances: [],
@@ -220,7 +220,7 @@ describe('Creates refresh call', () => {
 });
 
 describe('Requests interceptor', () => {
-    let cache: AxiosAuthRefreshCache = undefined;
+    let cache: XiorAuthRefreshCache = undefined;
     beforeEach(() => {
         cache = {
             skipInstances: [],
@@ -230,7 +230,7 @@ describe('Requests interceptor', () => {
     });
 
     it('is created', () => {
-        const mock = mockedAxios();
+        const mock = mockedXior();
         createRefreshCall({}, () => Promise.resolve(), cache);
         const result1 = createRequestQueueInterceptor(mock, cache, {});
         expect(mock.interceptors.has('request', result1)).toBeTruthy();
@@ -279,7 +279,7 @@ describe('Requests interceptor', () => {
             );
             await instance.get('http://example.com').then(() => expect(refreshed).toBe(1));
             await instance
-                .get('http://example.com', <AxiosAuthRefreshRequestConfig>{ skipAuthRefresh: true })
+                .get('http://example.com', <XiorAuthRefreshRequestConfig>{ skipAuthRefresh: true })
                 .then(() => expect(refreshed).toBe(1));
         } catch (e) {
             expect(e).toBeFalsy();
@@ -422,14 +422,14 @@ describe('Creates the overall interceptor correctly', () => {
 });
 
 describe('State is cleared', () => {
-    const cache: AxiosAuthRefreshCache = {
+    const cache: XiorAuthRefreshCache = {
         skipInstances: [],
         refreshCall: undefined,
         requestQueueInterceptorId: undefined,
     };
 
     it('after refreshing call succeeds/fails', () => {
-        const instance = mockedAxios();
+        const instance = mockedXior();
         cache.requestQueueInterceptorId = instance.interceptors.request.use(() => undefined);
         cache.skipInstances.push(instance);
         expect(instance.interceptors.has('request', cache.requestQueueInterceptorId)).toBeTruthy();
