@@ -36,7 +36,7 @@ declare module 'xior' {
  */
 export default function createAuthRefreshInterceptor(
     instance: XiorInstance,
-    refreshAuthCall: (error: XiorError) => Promise<XiorResponse> | Promise<void>,
+    refreshAuthCall: (error: XiorError) => Promise<void | XiorResponse<any>>,
     options: XiorAuthRefreshOptions = {}
 ): any {
     if (typeof refreshAuthCall !== 'function') {
