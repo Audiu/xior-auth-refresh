@@ -19,8 +19,17 @@
         "url": "https://github.com/Audiu/xior-auth-refresh/issues"
     },
     "homepage": "https://github.com/Audiu/xior-auth-refresh#readme",
-    "main": "dist/index.min.js",
-    "types": "dist/index.d.ts",
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.ts",
+    "require": "./dist/index.cjs",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "require": "./dist/index.cjs",
+            "import": "./dist/index.mjs",
+            "module": "./dist/index.esm.js"
+        }
+    },
     "author": "Dawid Zbiński <dawid@zbinski.eu>",
     "contributors": [
         "Dawid Zbiński <dawid@zbinski.eu>",
@@ -30,7 +39,8 @@
     "private": false,
     "scripts": {
         "dev": "webpack --mode development",
-        "build": "webpack --mode production",
+        "build": "bunchee -m",
+        "build:umd": "webpack --mode production",
         "typescript": "tsc --noEmit",
         "test": "jest",
         "test:coverage": "jest --coverage",
@@ -42,6 +52,7 @@
         "xior": "^0.3.12"
     },
     "devDependencies": {
+        "bunchee": "^5.1.2",
         "@types/jest": "^28.1.6",
         "xior": "^0.3.12",
         "babel-loader": "^9.1.0",
