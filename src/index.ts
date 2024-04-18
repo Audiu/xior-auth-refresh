@@ -13,12 +13,6 @@ import {
 
 export { XiorAuthRefreshOptions, XiorAuthRefreshRequestConfig } from './model';
 
-export declare module xior {
-    interface XiorRequestConfig {
-        skipAuthRefresh?: boolean;
-    }
-}
-
 /**
  * Creates an authentication refresh interceptor that binds to any error response.
  * If the response status code is one of the options.statusCodes, interceptor calls the refreshAuthCall
