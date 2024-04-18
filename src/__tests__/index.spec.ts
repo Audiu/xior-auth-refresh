@@ -278,9 +278,7 @@ describe('Requests interceptor', () => {
                 cache
             );
             await instance.get('http://example.com').then(() => expect(refreshed).toBe(1));
-            await instance
-                .get('http://example.com', <XiorAuthRefreshRequestConfig>{ skipAuthRefresh: true })
-                .then(() => expect(refreshed).toBe(1));
+            await instance.get('http://example.com', { skipAuthRefresh: true }).then(() => expect(refreshed).toBe(1));
         } catch (e) {
             expect(e).toBeFalsy();
         }

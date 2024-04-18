@@ -1,5 +1,5 @@
-import { XiorInstance, XiorResponse } from 'xior';
-import { XiorAuthRefreshOptions, XiorAuthRefreshCache } from './model';
+import { XiorError, XiorInstance, XiorResponse } from 'xior';
+import { XiorAuthRefreshOptions, XiorAuthRefreshCache, XiorAuthRefreshRequestConfig } from './model';
 import {
     unsetCache,
     mergeOptions,
@@ -11,7 +11,13 @@ import {
     createRequestQueueInterceptor,
 } from './utils';
 
-export { XiorAuthRefreshOptions, XiorAuthRefreshRequestConfig } from './model';
+export type { XiorAuthRefreshOptions, XiorAuthRefreshRequestConfig };
+
+declare module 'xior' {
+    interface XiorRequestConfig {
+        skipAuthRefresh?: boolean;
+    }
+}
 
 /**
  * Creates an authentication refresh interceptor that binds to any error response.
@@ -24,13 +30,13 @@ export { XiorAuthRefreshOptions, XiorAuthRefreshRequestConfig } from './model';
  * not run into interceptors loop.
  *
  * @param {XiorInstance} instance - Xior HTTP client instance
- * @param {(error: any) => Promise<any>} refreshAuthCall - refresh token call which must return a Promise
+ * @param {(error: XiorError) => Promise<any>} refreshAuthCall - refresh token call which must return a Promise
  * @param {XiorAuthRefreshOptions} options - options for the interceptor @see defaultOptions
  * @return {func} - Anonymous interceptor function
  */
 export default function createAuthRefreshInterceptor(
     instance: XiorInstance,
-    refreshAuthCall: (error: any) => Promise<XiorResponse> | Promise<void>,
+    refreshAuthCall: (error: XiorError) => Promise<XiorResponse> | Promise<void>,
     options: XiorAuthRefreshOptions = {}
 ): any {
     if (typeof refreshAuthCall !== 'function') {
@@ -44,8 +50,8 @@ export default function createAuthRefreshInterceptor(
     };
 
     return instance.interceptors.response.use(
-        (response: any) => response,
-        (error: any) => {
+        (response) => response,
+        (error) => {
             options = mergeOptions(defaultOptions, options);
 
             if (!shouldInterceptError(error, options, instance, cache)) {
