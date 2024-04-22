@@ -55,7 +55,9 @@ export default function createAuthRefreshInterceptor(
             options = mergeOptions(defaultOptions, options);
 
             if (!shouldInterceptError(error, options, instance, cache)) {
-                return Promise.reject(error);
+                // https://github.com/suhaotian/xior/issues/15 - in current version this will stop the reject chain
+                //return Promise.reject(error);
+                return;
             }
 
             if (options.pauseInstanceWhileRefreshing) {
@@ -68,10 +70,17 @@ export default function createAuthRefreshInterceptor(
             // Create interceptor that will bind all the others requests until refreshAuthCall is resolved
             createRequestQueueInterceptor(instance, cache, options);
 
-            return refreshing
-                .catch((error) => Promise.reject(error))
-                .then(() => resendFailedRequest(error, getRetryInstance(instance, options)))
-                .finally(() => unsetCache(instance, cache));
+            return (
+                refreshing
+                    // https://github.com/suhaotian/xior/issues/15 - in current version this will stop the reject chain
+                    //.catch((error) => Promise.reject(error))
+                    .then(() => resendFailedRequest(error, getRetryInstance(instance, options)))
+                    // However, if we were successful, we now want to stop the reject chain
+                    // This will break any response intercepts which run for successful responses after, but that is
+                    // broken currently anyway (it isn't the same as axios - https://github.com/axios/axios?tab=readme-ov-file#multiple-interceptors)
+                    .then(() => Promise.reject(error))
+                    .finally(() => unsetCache(instance, cache))
+            );
         }
     );
 }
