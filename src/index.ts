@@ -78,7 +78,7 @@ export default function createAuthRefreshInterceptor(
                     // However, if we were successful, we now want to stop the reject chain
                     // This will break any response intercepts which run for successful responses after, but that is
                     // broken currently anyway (it isn't the same as axios - https://github.com/axios/axios?tab=readme-ov-file#multiple-interceptors)
-                    .then(() => Promise.reject(error))
+                    //.then(() => Promise.reject(error))
                     .finally(() => unsetCache(instance, cache))
             );
         }
