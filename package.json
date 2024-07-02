@@ -1,6 +1,6 @@
 {
     "name": "xior-auth-refresh",
-    "version": "0.3.0",
+    "version": "0.5.0",
     "description": "Xior plugin which makes it very easy to automatically refresh the authorization tokens of your clients",
     "keywords": [
         "xior",
@@ -49,12 +49,12 @@
         "prepare": "husky install"
     },
     "peerDependencies": {
-        "xior": "^0.4.0"
+        "xior": "^0.5.1"
     },
     "devDependencies": {
         "bunchee": "^5.1.2",
         "@types/jest": "^28.1.6",
-        "xior": "^0.3.12",
+        "xior": "^0.5.1",
         "babel-loader": "^9.1.0",
         "clean-webpack-plugin": "^4.0.0",
         "declaration-bundler-webpack-plugin": "^1.0.3",
