@@ -1,4 +1,10 @@
-import xior, { XiorError, XiorInstance, XiorRequestConfig, XiorTimeoutError } from 'xior';
+import xior, {
+    XiorError,
+    XiorInstance,
+    XiorInterceptorRequestConfig,
+    XiorRequestConfig,
+    XiorTimeoutError,
+} from 'xior';
 import errorRetry from 'xior/plugins/error-retry';
 import createAuthRefreshInterceptor, { XiorAuthRefreshOptions } from '../index';
 import { XiorAuthRefreshCache } from '../model';
@@ -47,9 +53,7 @@ function createInstance(fetchImplementation: (input: any, init?: any) => Promise
 
 function createCache(overrides: Partial<XiorAuthRefreshCache> = {}): XiorAuthRefreshCache {
     return {
-        skipInstances: [],
         refreshCall: undefined,
-        requestQueueInterceptorId: undefined,
         ...overrides,
     };
 }
@@ -72,31 +76,13 @@ const safeAuthRetry = (config: XiorRequestConfig, error: XiorError) => {
 };
 
 describe('options and interception decisions', () => {
-    const instance = xior.create({ fetch: async () => response(200) });
-
     it('merges defaults without mutating either input', () => {
-        const defaults: XiorAuthRefreshOptions = { statusCodes: [401], pauseInstanceWhileRefreshing: false };
+        const defaults: XiorAuthRefreshOptions = { statusCodes: [401] };
         const options: XiorAuthRefreshOptions = { statusCodes: [403] };
 
-        expect(mergeOptions(defaults, options)).toEqual({
-            statusCodes: [403],
-            pauseInstanceWhileRefreshing: false,
-        });
-        expect(defaults).toEqual({ statusCodes: [401], pauseInstanceWhileRefreshing: false });
+        expect(mergeOptions(defaults, options)).toEqual({ statusCodes: [403] });
+        expect(defaults).toEqual({ statusCodes: [401] });
         expect(options).toEqual({ statusCodes: [403] });
-    });
-
-    it('prefers the current pause option over the deprecated alias', () => {
-        expect(
-            mergeOptions(defaultOptions, {
-                pauseInstanceWhileRefreshing: false,
-                skipWhileRefreshing: true,
-            }).pauseInstanceWhileRefreshing,
-        ).toBe(false);
-    });
-
-    it('supports the deprecated skipWhileRefreshing alias', () => {
-        expect(mergeOptions(defaultOptions, { skipWhileRefreshing: true }).pauseInstanceWhileRefreshing).toBe(true);
     });
 
     it.each([
@@ -105,29 +91,25 @@ describe('options and interception decisions', () => {
         ['a response without status', { response: {} }],
         ['a non-matching status', { response: { status: 403 } }],
     ])('does not intercept %s', (_description, error) => {
-        expect(shouldInterceptError(error, defaultOptions, instance, createCache())).toBe(false);
+        expect(shouldInterceptError(error, defaultOptions)).toBe(false);
     });
 
     it('matches numeric and numeric-string response statuses', () => {
-        expect(shouldInterceptError({ response: { status: 401 } }, defaultOptions, instance, createCache())).toBe(true);
-        expect(shouldInterceptError({ response: { status: '401' } }, defaultOptions, instance, createCache())).toBe(
-            true,
-        );
+        expect(shouldInterceptError({ response: { status: 401 } }, defaultOptions)).toBe(true);
+        expect(shouldInterceptError({ response: { status: '401' } }, defaultOptions)).toBe(true);
     });
 
     it('does not accept partially numeric response statuses', () => {
-        expect(
-            shouldInterceptError({ response: { status: '401-invalid' } }, defaultOptions, instance, createCache()),
-        ).toBe(false);
+        expect(shouldInterceptError({ response: { status: '401-invalid' } }, defaultOptions)).toBe(false);
     });
 
     it('does not intercept statuses when no statusCodes are configured', () => {
-        expect(shouldInterceptError({ response: { status: 401 } }, {}, instance, createCache())).toBe(false);
+        expect(shouldInterceptError({ response: { status: 401 } }, {})).toBe(false);
     });
 
     it('honours skipAuthRefresh', () => {
         const error = { response: { status: 401 }, config: { skipAuthRefresh: true } };
-        expect(shouldInterceptError(error, defaultOptions, instance, createCache())).toBe(false);
+        expect(shouldInterceptError(error, defaultOptions)).toBe(false);
     });
 
     it('lets shouldRefresh override statusCodes', () => {
@@ -139,28 +121,12 @@ describe('options and interception decisions', () => {
                     statusCodes: [401],
                     shouldRefresh: (candidate) => candidate.response?.data.code === 'TOKEN_EXPIRED',
                 },
-                instance,
-                createCache(),
             ),
         ).toBe(true);
         expect(
             shouldInterceptError(
                 { response: { status: 401 } },
                 { statusCodes: [401], shouldRefresh: () => false },
-                instance,
-                createCache(),
-            ),
-        ).toBe(false);
-    });
-
-    it('does not re-intercept a paused instance', () => {
-        const cache = createCache({ skipInstances: [instance] });
-        expect(
-            shouldInterceptError(
-                { response: { status: 401 } },
-                { ...defaultOptions, pauseInstanceWhileRefreshing: true },
-                instance,
-                cache,
             ),
         ).toBe(false);
     });
@@ -169,9 +135,7 @@ describe('options and interception decisions', () => {
         const config = { url: '/network-error' };
         const error: any = { config };
 
-        expect(
-            shouldInterceptError(error, { ...defaultOptions, interceptNetworkError: true }, instance, createCache()),
-        ).toBe(true);
+        expect(shouldInterceptError(error, { ...defaultOptions, interceptNetworkError: true })).toBe(true);
         expect(error.request).toBe(config);
         expect(error.response.config).toBe(config);
     });
@@ -181,17 +145,13 @@ describe('options and interception decisions', () => {
             shouldInterceptError(
                 new TypeError('fetch failed'),
                 { ...defaultOptions, interceptNetworkError: true },
-                instance,
-                createCache(),
             ),
         ).toBe(false);
     });
 
     it('does not refresh cancellations or timeouts', () => {
         const timeout = new XiorTimeoutError('timed out', { url: '/slow' });
-        expect(
-            shouldInterceptError(timeout, { ...defaultOptions, interceptNetworkError: true }, instance, createCache()),
-        ).toBe(false);
+        expect(shouldInterceptError(timeout, { ...defaultOptions, interceptNetworkError: true })).toBe(false);
     });
 });
 
@@ -241,11 +201,34 @@ describe('refresh and queue primitives', () => {
         expect(fetch).not.toHaveBeenCalled();
     });
 
+    it('lets requests marked with skipAuthRefresh bypass an active queue', async () => {
+        const gate = deferred<void>();
+        const { instance, fetch } = createInstance(async () => response(200));
+        const cache = createCache({ refreshCall: gate.promise });
+        createRequestQueueInterceptor(instance, cache, {});
+
+        await expect(instance.get('/refresh', { skipAuthRefresh: true })).resolves.toMatchObject({ status: 200 });
+        expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases a queued request unchanged when no onRetry callback is configured', async () => {
+        const gate = deferred<void>();
+        const { instance, fetch } = createInstance(async () => response(200));
+        const cache = createCache({ refreshCall: gate.promise });
+        createRequestQueueInterceptor(instance, cache, {});
+
+        const request = instance.get('/queued');
+        gate.resolve();
+        await request;
+
+        expect(fetch.mock.calls[0][0]).toBe('/queued');
+    });
+
     it('runs an asynchronous onRetry before releasing a queued request', async () => {
         const gate = deferred<void>();
         const { instance, fetch } = createInstance(async () => response(200));
         const cache = createCache({ refreshCall: gate.promise });
-        const onRetry = jest.fn(async (config: XiorRequestConfig) => ({ ...config, url: '/changed' }));
+        const onRetry = jest.fn(async (config: XiorInterceptorRequestConfig) => ({ ...config, url: '/changed' }));
         createRequestQueueInterceptor(instance, cache, { onRetry });
 
         const request = instance.get('/original');
@@ -256,21 +239,14 @@ describe('refresh and queue primitives', () => {
         expect(fetch.mock.calls[0][0]).toBe('/changed');
     });
 
-    it('clears refresh and pause state while keeping the stable queue interceptor', () => {
-        const { instance } = createInstance(async () => response(200));
-        const cache = createCache({ skipInstances: [instance] });
+    it('clears refresh state', () => {
+        const cache = createCache();
         cache.refreshCall = Promise.resolve();
-        const queueInterceptor = createRequestQueueInterceptor(instance, cache, {});
 
-        unsetCache(instance, cache);
-        unsetCache(instance, cache);
+        unsetCache(cache);
+        unsetCache(cache);
 
-        expect(cache).toEqual({
-            skipInstances: [],
-            refreshCall: undefined,
-            requestQueueInterceptorId: queueInterceptor,
-        });
-        expect(instance.REQI).toEqual([queueInterceptor]);
+        expect(cache).toEqual({ refreshCall: undefined });
     });
 
     it('selects the configured retry instance', () => {
@@ -329,7 +305,7 @@ describe('xior 0.8 authentication refresh integration', () => {
         expect(fetch.mock.calls.map((call) => call[1].headers.authorization)).toEqual(['expired', 'fresh']);
     });
 
-    it('allows the refresh callback to use the intercepted instance', async () => {
+    it('allows a skipped refresh request to use the intercepted instance after asynchronous work', async () => {
         let token = 'expired';
         const { instance, fetch } = createInstance(async (input, init) => {
             if (input === '/auth/refresh') {
@@ -339,7 +315,10 @@ describe('xior 0.8 authentication refresh integration', () => {
             return init.headers.authorization === 'fresh' ? response(200) : response(401);
         });
         installTokenHeader(instance, () => token);
-        createAuthRefreshInterceptor(instance, () => instance.post('/auth/refresh'));
+        createAuthRefreshInterceptor(instance, async () => {
+            await nextTurn();
+            return instance.post('/auth/refresh', undefined, { skipAuthRefresh: true });
+        });
 
         await expect(instance.get('/protected')).resolves.toMatchObject({ status: 200 });
         expect(fetch.mock.calls.map((call) => call[0])).toEqual(['/protected', '/auth/refresh', '/protected']);
@@ -363,7 +342,7 @@ describe('xior 0.8 authentication refresh integration', () => {
             await releaseRefresh.promise;
             token = 'fresh';
         });
-        const onRetry = jest.fn((config: XiorRequestConfig) => config);
+        const onRetry = jest.fn((config: XiorInterceptorRequestConfig) => config);
         createAuthRefreshInterceptor(instance, refresh, { onRetry });
 
         const wave = Array.from({ length: requestCount }, (_, index) => instance.get(`/wave/${index}`));
@@ -426,57 +405,6 @@ describe('xior 0.8 authentication refresh integration', () => {
         ]);
         expect(interceptorRuns.get('/slow')).toBe(2);
         expect(interceptorRuns.get('/trigger')).toBe(2);
-        expect(fetch).toHaveBeenCalledTimes(4);
-    });
-
-    it('pauses new requests while allowing an already in-flight failure to reject', async () => {
-        let token = 'expired';
-        let expiredFetches = 0;
-        const bothInitialRequestsStarted = deferred<void>();
-        const releaseInitialResponses = deferred<void>();
-        const refreshStarted = deferred<void>();
-        const releaseRefresh = deferred<void>();
-        const { instance, fetch } = createInstance(async (_input, init) => {
-            if (init.headers.authorization === 'fresh') {
-                return response(200);
-            }
-            expiredFetches += 1;
-            if (expiredFetches === 2) {
-                bothInitialRequestsStarted.resolve();
-            }
-            await releaseInitialResponses.promise;
-            return response(401);
-        });
-        installTokenHeader(instance, () => token);
-        const refresh = jest.fn(async () => {
-            refreshStarted.resolve();
-            await releaseRefresh.promise;
-            token = 'fresh';
-        });
-        createAuthRefreshInterceptor(instance, refresh, { pauseInstanceWhileRefreshing: true });
-
-        const initial = ['/first', '/second'].map((url) =>
-            instance.get(url).then(
-                (value) => ({ status: 'fulfilled' as const, value }),
-                (error) => ({ status: 'rejected' as const, error }),
-            ),
-        );
-        await bothInitialRequestsStarted.promise;
-        releaseInitialResponses.resolve();
-        await refreshStarted.promise;
-
-        const firstSettled = await Promise.race(initial);
-        expect(firstSettled).toMatchObject({ status: 'rejected', error: { response: { status: 401 } } });
-
-        const lateRequest = instance.get('/late');
-        await nextTurn();
-        expect(fetch).toHaveBeenCalledTimes(2);
-
-        releaseRefresh.resolve();
-        const [initialResults, lateResult] = await Promise.all([Promise.all(initial), lateRequest]);
-        expect(initialResults.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
-        expect(lateResult.status).toBe(200);
-        expect(refresh).toHaveBeenCalledTimes(1);
         expect(fetch).toHaveBeenCalledTimes(4);
     });
 
@@ -558,7 +486,7 @@ describe('xior 0.8 authentication refresh integration', () => {
             token = 'fresh';
             return Promise.resolve();
         });
-        createAuthRefreshInterceptor(instance, refresh as any, { pauseInstanceWhileRefreshing: true });
+        createAuthRefreshInterceptor(instance, refresh as any);
 
         await expect(instance.get('/first')).rejects.toThrow('refreshAuthCall` to return a promise');
         await expect(instance.get('/second')).resolves.toMatchObject({ status: 200 });
@@ -593,13 +521,17 @@ describe('xior 0.8 authentication refresh integration', () => {
             input === '/healthy' ? response(200) : response(403),
         );
         const refresh = jest.fn(async () => undefined);
-        const onRetry = jest.fn(async (config: XiorRequestConfig) => ({ ...config, url: '/healthy' }));
+        const onRetry = jest.fn(async ({ skipAuthRefresh: _skipAuthRefresh, ...config }: XiorInterceptorRequestConfig) => ({
+            ...config,
+            url: '/healthy',
+        }));
         createAuthRefreshInterceptor(instance, refresh, { statusCodes: [403], onRetry });
 
         await expect(instance.get('/forbidden')).resolves.toMatchObject({ status: 200 });
         expect(refresh).toHaveBeenCalledTimes(1);
         expect(onRetry).toHaveBeenCalledTimes(1);
         expect(fetch.mock.calls.map((call) => call[0])).toEqual(['/forbidden', '/healthy']);
+        expect(fetch.mock.calls[1][1].skipAuthRefresh).toBe(true);
     });
 
     it('replays through a custom retry instance', async () => {
@@ -652,14 +584,17 @@ describe('xior 0.8 authentication refresh integration', () => {
         expect(refresh).not.toHaveBeenCalled();
     });
 
-    it('returns the xior 0.8 response handler and allows it to be ejected', async () => {
+    it('returns an idempotent ejector that removes both interceptors', async () => {
         const { instance, fetch } = createInstance(async () => response(401));
         const refresh = jest.fn(async () => undefined);
-        const handler = createAuthRefreshInterceptor(instance, refresh);
+        const eject = createAuthRefreshInterceptor(instance, refresh);
 
-        expect(instance.RESI).toContain(handler);
-        instance.interceptors.response.eject(handler);
-        expect(instance.RESI).not.toContain(handler);
+        expect(instance.REQI).toHaveLength(1);
+        expect(instance.RESI).toHaveLength(1);
+        eject();
+        eject();
+        expect(instance.REQI).toHaveLength(0);
+        expect(instance.RESI).toHaveLength(0);
 
         await expect(instance.get('/after-eject')).rejects.toBeInstanceOf(XiorError);
         expect(refresh).not.toHaveBeenCalled();

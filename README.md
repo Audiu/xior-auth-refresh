@@ -38,7 +38,7 @@ createAuthRefreshInterceptor(
     xior: XiorInstance,
     refreshAuthLogic: (failedRequest: any) => Promise<any>,
     options: XiorAuthRefreshOptions = {}
-): ReturnType<XiorInstance['interceptors']['response']['use']>;
+): XiorAuthRefreshEjector;
 ```
 
 #### Parameters
@@ -50,7 +50,7 @@ createAuthRefreshInterceptor(
 
 #### Returns
 
-The xior response-interceptor handler. Pass it to `xior.interceptors.response.eject(handler)` to remove the interceptor.
+An idempotent function that ejects both the response interceptor and the request-queue interceptor.
 
 ## Usage
 
@@ -68,24 +68,32 @@ import createAuthRefreshInterceptor from 'xior-auth-refresh';
 
 // Function that will be called to refresh authorization
 const refreshAuthLogic = (failedRequest) =>
-    xior.post('https://www.example.com/auth/token/refresh').then((tokenRefreshResponse) => {
-        localStorage.setItem('token', tokenRefreshResponse.data.token);
-        failedRequest.response.config.headers['Authorization'] = 'Bearer ' + tokenRefreshResponse.data.token;
-        return Promise.resolve();
-    });
+    xior
+        .post('https://www.example.com/auth/token/refresh', undefined, {
+            // Required when the refresh call uses the intercepted instance.
+            skipAuthRefresh: true,
+        })
+        .then((tokenRefreshResponse) => {
+            localStorage.setItem('token', tokenRefreshResponse.data.token);
+            failedRequest.response.config.headers['Authorization'] = 'Bearer ' + tokenRefreshResponse.data.token;
+        });
 
 // Instantiate the interceptor
-createAuthRefreshInterceptor(xior, refreshAuthLogic);
+const ejectAuthRefresh = createAuthRefreshInterceptor(xior, refreshAuthLogic);
 
 // Make a call. If it returns a 401 error, the refreshAuthLogic will be run,
 // and the request retried with the new token
 xior.get('https://www.example.com/restricted/area').then(/* ... */).catch(/* ... */);
+
+// Remove both interceptors when they are no longer needed.
+ejectAuthRefresh();
 ```
 
 #### Skipping the interceptor
 
-There's a possibility to skip the logic of the interceptor for specific calls.
-To do this, you need to pass the `skipAuthRefresh` option to the request config for each request you don't want to intercept.
+There's a possibility to skip the queue and refresh logic for specific calls.
+Pass the `skipAuthRefresh` option to the request config for each request you don't want to intercept. A refresh request
+made with the intercepted instance must use this option so it can run while other requests wait for it.
 
 ```javascript
 xior.get('https://www.example.com/', { skipAuthRefresh: true });
@@ -97,7 +105,7 @@ Since this plugin automatically stalls additional requests while refreshing the 
 it is a good idea to **wrap your request logic in a function**,
 to make sure the stalled requests are using the newly fetched data (like token).
 
-With xior 0.8, request interceptors run in registration order. This package places its temporary refresh queue
+With xior 0.8, request interceptors run in registration order. This package places its refresh queue
 ahead of existing request interceptors so stalled requests wait first, then read the new token exactly once before
 they are sent.
 
@@ -161,24 +169,11 @@ stalled request is called with the request configuration object.
 }
 ```
 
-#### Pause the instance while "refresh logic" is running
+#### Refresh client
 
-While your refresh logic is running, the interceptor will be triggered for every request
-which returns one of the `options.statusCodes` specified (HTTP 401 by default).
-
-In order to prevent the interceptors loop (when your refresh logic fails with any of the status
-codes specified in `options.statusCodes`) you need to use a [`skipAuthRefresh`](#skipping-the-interceptor)
-flag on your refreshing call inside the `refreshAuthLogic` function.
-
-In case your refresh logic does not make any calls, you should consider using the following flag
-when initializing the interceptor to pause the whole xior instance while the refreshing is pending.
-This prevents interceptor from running for each failed request.
-
-```javascript
-{
-    pauseInstanceWhileRefreshing: true, // default: false
-}
-```
+Using a separate xior instance for the refresh request is recommended when it has different transport, retry or error
+handling requirements. It is not required. When the intercepted instance is reused, mark the refresh request with
+[`skipAuthRefresh`](#skipping-the-interceptor) so it bypasses the active request queue and cannot start a refresh loop.
 
 #### Intercept on network error
 

@@ -1,9 +1,8 @@
-import { isCancel, XiorInstance, XiorRequestConfig } from 'xior';
+import { isCancel, XiorInstance, XiorInterceptorRequestConfig, XiorRequestConfig } from 'xior';
 import { XiorAuthRefreshOptions, XiorAuthRefreshCache } from './model';
 
 export const defaultOptions: XiorAuthRefreshOptions = {
     statusCodes: [401],
-    pauseInstanceWhileRefreshing: false,
 };
 
 /**
@@ -15,13 +14,9 @@ export function mergeOptions(
     defaults: XiorAuthRefreshOptions,
     options: XiorAuthRefreshOptions,
 ): XiorAuthRefreshOptions {
-    const pauseInstanceWhileRefreshing =
-        options.pauseInstanceWhileRefreshing ?? options.skipWhileRefreshing ?? defaults.pauseInstanceWhileRefreshing;
-
     return {
         ...defaults,
         ...options,
-        pauseInstanceWhileRefreshing,
     };
 }
 
@@ -34,8 +29,6 @@ export function mergeOptions(
 export function shouldInterceptError(
     error: any,
     options: XiorAuthRefreshOptions,
-    instance: XiorInstance,
-    cache: XiorAuthRefreshCache,
 ): boolean {
     if (!error) {
         return false;
@@ -70,7 +63,7 @@ export function shouldInterceptError(
         return false;
     }
 
-    return !options.pauseInstanceWhileRefreshing || !cache.skipInstances.includes(instance);
+    return true;
 }
 
 /**
@@ -113,37 +106,38 @@ export function createRequestQueueInterceptor(
     cache: XiorAuthRefreshCache,
     options: XiorAuthRefreshOptions,
 ): ReturnType<XiorInstance['interceptors']['request']['use']> {
-    if (typeof cache.requestQueueInterceptorId === 'undefined') {
-        const queueInterceptor = async (request: any) => {
-            const refreshCall = cache.refreshCall;
-            if (!refreshCall) {
-                return request;
-            }
+    const queueInterceptor = async (request: XiorInterceptorRequestConfig) => {
+        if (request.skipAuthRefresh) {
+            return request;
+        }
 
-            await refreshCall;
-            return options.onRetry ? options.onRetry(request) : request;
-        };
-        cache.requestQueueInterceptorId = instance.interceptors.request.use(queueInterceptor);
+        const refreshCall = cache.refreshCall;
+        if (!refreshCall) {
+            return request;
+        }
 
-        // xior 0.8 runs request interceptors FIFO. Install the stable refresh gate
-        // ahead of existing interceptors so requests wait before token/signing work.
-        // This ordering is established once during setup, never during live iteration.
-        const interceptorIndex = instance.REQI.indexOf(queueInterceptor);
-        instance.REQI.splice(interceptorIndex, 1);
-        instance.REQI.unshift(queueInterceptor);
-    }
-    return cache.requestQueueInterceptorId;
+        await refreshCall;
+        return options.onRetry ? options.onRetry(request) : request;
+    };
+    const requestQueueInterceptor = instance.interceptors.request.use(queueInterceptor);
+
+    // xior 0.8 runs request interceptors FIFO. Install the stable refresh gate
+    // ahead of existing interceptors so requests wait before token/signing work.
+    // This ordering is established once during setup, never during live iteration.
+    const interceptorIndex = instance.REQI.indexOf(queueInterceptor);
+    instance.REQI.splice(interceptorIndex, 1);
+    instance.REQI.unshift(queueInterceptor);
+
+    return requestQueueInterceptor;
 }
 
 /**
- * Ejects request queue interceptor and unset interceptor cached values.
+ * Clears the cached refresh operation.
  *
- * @param {XiorInstance} instance
  * @param {XiorAuthRefreshCache} cache
  */
-export function unsetCache(instance: XiorInstance, cache: XiorAuthRefreshCache): void {
+export function unsetCache(cache: XiorAuthRefreshCache): void {
     cache.refreshCall = undefined;
-    cache.skipInstances = cache.skipInstances.filter((skipInstance) => skipInstance !== instance);
 }
 
 /**
@@ -163,15 +157,24 @@ export function getRetryInstance(instance: XiorInstance, options: XiorAuthRefres
  * @param {XiorInstance} instance
  * @return Promise<any>
  */
-export function resendFailedRequest(error: any, instance: XiorInstance, useRetryInstanceFetch = false): Promise<any> {
+export async function resendFailedRequest(
+    error: any,
+    instance: XiorInstance,
+    useRetryInstanceFetch = false,
+    onRetry?: XiorAuthRefreshOptions['onRetry'],
+): Promise<any> {
     const requestConfig: XiorRequestConfig | undefined = error.config || error.response?.config;
     if (!requestConfig) {
-        return Promise.reject(error);
+        throw error;
     }
 
     const retryConfig = { ...requestConfig, skipAuthRefresh: true };
     if (useRetryInstanceFetch) {
         delete retryConfig.fetch;
     }
-    return instance.request(retryConfig);
+
+    const finalConfig = onRetry
+        ? await onRetry(retryConfig as XiorInterceptorRequestConfig)
+        : retryConfig;
+    return instance.request({ ...finalConfig, skipAuthRefresh: true });
 }
