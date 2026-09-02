@@ -18,6 +18,9 @@ You can either run a refresh call for a new authorization token or run a custom 
 The plugin stalls additional requests that have come in while waiting for a new authorization token
 and resolves them when a new token is available.
 
+Version 0.8.x of this package targets xior 0.8.4 and later within the xior 0.8 release line.
+See the [changelog](CHANGELOG.md#080) for compatibility notes and guidance when upgrading from 0.6.x.
+
 ## Installation
 
 Using [npm](https://www.npmjs.com/get-npm) or [yarn](https://yarnpkg.com/en/docs/install):
@@ -35,23 +38,23 @@ createAuthRefreshInterceptor(
     xior: XiorInstance,
     refreshAuthLogic: (failedRequest: any) => Promise<any>,
     options: XiorAuthRefreshOptions = {}
-): number;
+): ReturnType<XiorInstance['interceptors']['response']['use']>;
 ```
 
 #### Parameters
 
--   `xior` - an instance of Xior
--   `refreshAuthLogic` - a Function used for refreshing authorization (**must return a promise**).
-    Accepts exactly one parameter, which is the `failedRequest` returned by the original call.
--   `options` - object with settings for interceptor (See [available options](#available-options))
+- `xior` - an instance of Xior
+- `refreshAuthLogic` - a Function used for refreshing authorization (**must return a promise**).
+  Accepts exactly one parameter, which is the `failedRequest` returned by the original call.
+- `options` - object with settings for interceptor (See [available options](#available-options))
 
 #### Returns
 
-Interceptor anonymous function.
+The xior response-interceptor handler. Pass it to `xior.interceptors.response.eject(handler)` to remove the interceptor.
 
 ## Usage
 
-In order to activate the interceptors, you need to import a function from `xiorf-auth-refresh`
+In order to activate the interceptors, you need to import a function from `xior-auth-refresh`
 which is _exported by default_ and call it with the **xior instance** you want the interceptors for,
 as well as the **refresh authorization function** where you need to write the logic for refreshing the authorization.
 
@@ -93,6 +96,10 @@ xior.get('https://www.example.com/', { skipAuthRefresh: true });
 Since this plugin automatically stalls additional requests while refreshing the token,
 it is a good idea to **wrap your request logic in a function**,
 to make sure the stalled requests are using the newly fetched data (like token).
+
+With xior 0.8, request interceptors run in registration order. This package places its temporary refresh queue
+ahead of existing request interceptors so stalled requests wait first, then read the new token exactly once before
+they are sent.
 
 Example of sending the tokens:
 
@@ -187,4 +194,40 @@ with an HTTP 401 response, your retry logic can test for network connectivity at
 {
     interceptNetworkError: true, // default: undefined
 }
+```
+
+xior exposes failures from the native `fetch` implementation as their original error. A network request can only
+be replayed when the custom fetch implementation attaches the failed `XiorRequestConfig` as `error.config` or
+`error.request`. Raw fetch errors without request configuration are preserved and are not refreshed, because safely
+reconstructing the request is impossible. Abort and timeout errors are never treated as authentication failures.
+
+#### Composing with xior's error-retry plugin
+
+This package already replays a request once after authentication is refreshed. Configure xior's generic retry plugin
+to exclude authentication responses and failed refresh cycles; otherwise a retry plugin can wrap and repeat the whole
+refresh flow.
+
+```typescript
+import xior, { XiorError, XiorRequestConfig } from 'xior';
+import errorRetry from 'xior/plugins/error-retry';
+import createAuthRefreshInterceptor from 'xior-auth-refresh';
+
+const client = xior.create();
+
+client.plugins.use(
+    errorRetry({
+        enableRetry(config: XiorRequestConfig, error: XiorError) {
+            // Authentication replay is owned by xior-auth-refresh.
+            if (error.response?.status === 401) return false;
+
+            // Do not repeat a request whose refresh callback failed.
+            if (config.skipAuthRefresh && !error.response) return false;
+
+            // `undefined` keeps xior's default retry behaviour for other GET failures.
+            return undefined;
+        },
+    }),
+);
+
+createAuthRefreshInterceptor(client, refreshAuthLogic);
 ```

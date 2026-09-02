@@ -8,10 +8,10 @@ from axios' [CONTRIBUTING](https://raw.githubusercontent.com/axios/axios/master/
 
 Commit messages should be verb based, using the following pattern:
 
--   `Fixing ...`
--   `Adding ...`
--   `Updating ...`
--   `Removing ...`
+- `Fixing ...`
+- `Adding ...`
+- `Updating ...`
+- `Removing ...`
 
 ### Documentation
 
@@ -19,10 +19,11 @@ Please update the docs accordingly so that there are no discrepencies between th
 
 ### Developing
 
-Please, use npm as a package manager if it's not a problem for you.
-Please, always include changes to `dist/` in your pull request.
+Please use npm and install the locked dependency graph with `npm ci`.
+Run `npm run check` before opening a pull request; it type-checks, runs the deterministic test suite with coverage,
+and verifies the distributable build.
 Please, do not include any `OS/IDE specific files` in your pull request.
 
 ### Build
 
-Please, use `npm run build` to build the package.
+Use `npm run build` to build the package. The generated `dist/` directory is intentionally not tracked.

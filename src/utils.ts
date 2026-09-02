@@ -1,4 +1,4 @@
-import { XiorInstance } from 'xior';
+import { isCancel, XiorInstance, XiorRequestConfig } from 'xior';
 import { XiorAuthRefreshOptions, XiorAuthRefreshCache } from './model';
 
 export const defaultOptions: XiorAuthRefreshOptions = {
@@ -13,12 +13,15 @@ export const defaultOptions: XiorAuthRefreshOptions = {
  */
 export function mergeOptions(
     defaults: XiorAuthRefreshOptions,
-    options: XiorAuthRefreshOptions
+    options: XiorAuthRefreshOptions,
 ): XiorAuthRefreshOptions {
+    const pauseInstanceWhileRefreshing =
+        options.pauseInstanceWhileRefreshing ?? options.skipWhileRefreshing ?? defaults.pauseInstanceWhileRefreshing;
+
     return {
         ...defaults,
-        pauseInstanceWhileRefreshing: options.skipWhileRefreshing,
         ...options,
+        pauseInstanceWhileRefreshing,
     };
 }
 
@@ -32,7 +35,7 @@ export function shouldInterceptError(
     error: any,
     options: XiorAuthRefreshOptions,
     instance: XiorInstance,
-    cache: XiorAuthRefreshCache
+    cache: XiorAuthRefreshCache,
 ): boolean {
     if (!error) {
         return false;
@@ -42,21 +45,29 @@ export function shouldInterceptError(
         return false;
     }
 
-    if (
-        !(options.interceptNetworkError && !error.response && error.request.status === 0) &&
-        (!error.response ||
-            (options?.shouldRefresh
-                ? !options.shouldRefresh(error)
-                : !options.statusCodes?.includes(parseInt(error.response.status))))
+    if (!error.response) {
+        if (!options.interceptNetworkError || isCancel(error)) {
+            return false;
+        }
+
+        const requestConfig = error.config || error.request;
+        if (!requestConfig) {
+            // xior intentionally exposes raw fetch TypeErrors. Without the request config
+            // there is no safe way to replay the failed request, so preserve that error.
+            return false;
+        }
+
+        error.config = requestConfig;
+        error.request = requestConfig;
+        error.response = {
+            config: requestConfig,
+        };
+    } else if (
+        options.shouldRefresh
+            ? !options.shouldRefresh(error)
+            : !options.statusCodes?.includes(Number(error.response.status))
     ) {
         return false;
-    }
-
-    // Copy config to response if there's a network error, so config can be modified and used in the retry
-    if (!error.response) {
-        error.response = {
-            config: error.config,
-        };
     }
 
     return !options.pauseInstanceWhileRefreshing || !cache.skipInstances.includes(instance);
@@ -70,14 +81,18 @@ export function shouldInterceptError(
 export function createRefreshCall(
     error: any,
     fn: (error: any) => Promise<any>,
-    cache: XiorAuthRefreshCache
+    cache: XiorAuthRefreshCache,
 ): Promise<any> {
     if (!cache.refreshCall) {
-        cache.refreshCall = fn(error);
-        if (typeof cache.refreshCall.then !== 'function') {
-            console.warn('xior-auth-refresh requires `refreshTokenCall` to return a promise.');
-            return Promise.reject();
-        }
+        // Assign the promise before invoking user code so concurrent failures always
+        // share one refresh cycle, including when the callback throws synchronously.
+        cache.refreshCall = Promise.resolve().then(() => {
+            const refreshCall = fn(error);
+            if (!refreshCall || typeof refreshCall.then !== 'function') {
+                throw new TypeError('xior-auth-refresh requires `refreshAuthCall` to return a promise.');
+            }
+            return refreshCall;
+        });
     }
     return cache.refreshCall;
 }
@@ -90,17 +105,21 @@ export function createRefreshCall(
 export function createRequestQueueInterceptor(
     instance: XiorInstance,
     cache: XiorAuthRefreshCache,
-    options: XiorAuthRefreshOptions
-): number {
+    options: XiorAuthRefreshOptions,
+): ReturnType<XiorInstance['interceptors']['request']['use']> {
     if (typeof cache.requestQueueInterceptorId === 'undefined') {
-        cache.requestQueueInterceptorId = instance.interceptors.request.use((request: any) => {
-            return cache.refreshCall
-                .catch(() => {
-                    //throw new xior.Cancel('Request call failed');
-                    throw new Error('Request call failed');
-                })
-                .then(() => (options.onRetry ? options.onRetry(request) : request));
-        });
+        const queueInterceptor = async (request: any) => {
+            await cache.refreshCall;
+            return options.onRetry ? options.onRetry(request) : request;
+        };
+        cache.requestQueueInterceptorId = instance.interceptors.request.use(queueInterceptor);
+
+        // xior 0.8 runs request interceptors FIFO. Move the refresh queue ahead
+        // of existing interceptors so newly stalled requests wait first, then run
+        // token/signing/logging interceptors exactly once with post-refresh state.
+        const interceptorIndex = instance.REQI.indexOf(queueInterceptor);
+        instance.REQI.splice(interceptorIndex, 1);
+        instance.REQI.unshift(queueInterceptor);
     }
     return cache.requestQueueInterceptorId;
 }
@@ -112,7 +131,9 @@ export function createRequestQueueInterceptor(
  * @param {XiorAuthRefreshCache} cache
  */
 export function unsetCache(instance: XiorInstance, cache: XiorAuthRefreshCache): void {
-    instance.interceptors.request.eject(cache.requestQueueInterceptorId);
+    if (typeof cache.requestQueueInterceptorId !== 'undefined') {
+        instance.interceptors.request.eject(cache.requestQueueInterceptorId);
+    }
     cache.requestQueueInterceptorId = undefined;
     cache.refreshCall = undefined;
     cache.skipInstances = cache.skipInstances.filter((skipInstance) => skipInstance !== instance);
@@ -135,7 +156,15 @@ export function getRetryInstance(instance: XiorInstance, options: XiorAuthRefres
  * @param {XiorInstance} instance
  * @return Promise<any>
  */
-export function resendFailedRequest(error: any, instance: XiorInstance): Promise<any> {
-    error.config.skipAuthRefresh = true;
-    return instance.request(error.response.config);
+export function resendFailedRequest(error: any, instance: XiorInstance, useRetryInstanceFetch = false): Promise<any> {
+    const requestConfig: XiorRequestConfig | undefined = error.config || error.response?.config;
+    if (!requestConfig) {
+        return Promise.reject(error);
+    }
+
+    const retryConfig = { ...requestConfig, skipAuthRefresh: true };
+    if (useRetryInstanceFetch) {
+        delete retryConfig.fetch;
+    }
+    return instance.request(retryConfig);
 }

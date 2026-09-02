@@ -37,12 +37,13 @@ declare module 'xior' {
 export default function createAuthRefreshInterceptor(
     instance: XiorInstance,
     refreshAuthCall: (error: XiorError) => Promise<void | XiorResponse<any>>,
-    options: XiorAuthRefreshOptions = {}
-): any {
+    options: XiorAuthRefreshOptions = {},
+): ReturnType<XiorInstance['interceptors']['response']['use']> {
     if (typeof refreshAuthCall !== 'function') {
         throw new Error('xior-auth-refresh requires `refreshAuthCall` to be a function that returns a promise.');
     }
 
+    const mergedOptions = mergeOptions(defaultOptions, options);
     const cache: XiorAuthRefreshCache = {
         skipInstances: [],
         refreshCall: undefined,
@@ -52,13 +53,18 @@ export default function createAuthRefreshInterceptor(
     return instance.interceptors.response.use(
         (response) => response,
         (error) => {
-            options = mergeOptions(defaultOptions, options);
-
-            if (!shouldInterceptError(error, options, instance, cache)) {
+            if (!shouldInterceptError(error, mergedOptions, instance, cache)) {
                 return Promise.reject(error);
             }
 
-            if (options.pauseInstanceWhileRefreshing) {
+            // Mark the complete auth-refresh cycle as handled. This prevents a
+            // surrounding retry plugin from starting another refresh cycle for
+            // the same request if refreshing itself fails.
+            if (error.config) {
+                error.config.skipAuthRefresh = true;
+            }
+
+            if (mergedOptions.pauseInstanceWhileRefreshing) {
                 cache.skipInstances.push(instance);
             }
 
@@ -66,12 +72,14 @@ export default function createAuthRefreshInterceptor(
             const refreshing = createRefreshCall(error, refreshAuthCall, cache);
 
             // Create interceptor that will bind all the others requests until refreshAuthCall is resolved
-            createRequestQueueInterceptor(instance, cache, options);
+            createRequestQueueInterceptor(instance, cache, mergedOptions);
 
             return refreshing
-                .catch((error) => Promise.reject(error))
-                .then(() => resendFailedRequest(error, getRetryInstance(instance, options)))
+                .then(() => {
+                    const retryInstance = getRetryInstance(instance, mergedOptions);
+                    return resendFailedRequest(error, retryInstance, retryInstance !== instance);
+                })
                 .finally(() => unsetCache(instance, cache));
-        }
+        },
     );
 }

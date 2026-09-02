@@ -24,7 +24,7 @@ export interface XiorAuthRefreshOptions {
 export interface XiorAuthRefreshCache {
     skipInstances: XiorInstance[];
     refreshCall: Promise<any> | undefined;
-    requestQueueInterceptorId: any;
+    requestQueueInterceptorId: ReturnType<XiorInstance['interceptors']['request']['use']> | undefined;
 }
 
 export interface XiorAuthRefreshRequestConfig extends XiorRequestConfig {
