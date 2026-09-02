@@ -584,6 +584,32 @@ describe('xior 0.8 authentication refresh integration', () => {
         expect(refresh).not.toHaveBeenCalled();
     });
 
+    it('does not re-intercept a skipped refresh network error stored in error.request', async () => {
+        let refreshFailure: TypeError | undefined;
+        const { instance, fetch } = createInstance(async (input, init) => {
+            const failure = Object.assign(new TypeError(`network failure for ${input}`), {
+                request: { ...init, url: input },
+            });
+            if (input === '/auth/refresh') {
+                refreshFailure = failure;
+            }
+            throw failure;
+        });
+        const refresh = jest.fn(() => instance.get('/auth/refresh', { skipAuthRefresh: true }));
+        createAuthRefreshInterceptor(instance, refresh, { interceptNetworkError: true });
+
+        let rejected: unknown;
+        try {
+            await instance.get('/protected');
+        } catch (error) {
+            rejected = error;
+        }
+
+        expect(rejected).toBe(refreshFailure);
+        expect(refresh).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
     it('returns an idempotent ejector that removes both interceptors', async () => {
         const { instance, fetch } = createInstance(async () => response(401));
         const refresh = jest.fn(async () => undefined);

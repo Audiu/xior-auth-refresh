@@ -34,7 +34,7 @@ export function shouldInterceptError(
         return false;
     }
 
-    if (error.config?.skipAuthRefresh) {
+    if (error.config?.skipAuthRefresh || error.request?.skipAuthRefresh) {
         return false;
     }
 
