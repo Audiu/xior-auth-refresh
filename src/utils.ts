@@ -109,14 +109,19 @@ export function createRequestQueueInterceptor(
 ): ReturnType<XiorInstance['interceptors']['request']['use']> {
     if (typeof cache.requestQueueInterceptorId === 'undefined') {
         const queueInterceptor = async (request: any) => {
-            await cache.refreshCall;
+            const refreshCall = cache.refreshCall;
+            if (!refreshCall) {
+                return request;
+            }
+
+            await refreshCall;
             return options.onRetry ? options.onRetry(request) : request;
         };
         cache.requestQueueInterceptorId = instance.interceptors.request.use(queueInterceptor);
 
-        // xior 0.8 runs request interceptors FIFO. Move the refresh queue ahead
-        // of existing interceptors so newly stalled requests wait first, then run
-        // token/signing/logging interceptors exactly once with post-refresh state.
+        // xior 0.8 runs request interceptors FIFO. Install the stable refresh gate
+        // ahead of existing interceptors so requests wait before token/signing work.
+        // This ordering is established once during setup, never during live iteration.
         const interceptorIndex = instance.REQI.indexOf(queueInterceptor);
         instance.REQI.splice(interceptorIndex, 1);
         instance.REQI.unshift(queueInterceptor);
@@ -131,10 +136,6 @@ export function createRequestQueueInterceptor(
  * @param {XiorAuthRefreshCache} cache
  */
 export function unsetCache(instance: XiorInstance, cache: XiorAuthRefreshCache): void {
-    if (typeof cache.requestQueueInterceptorId !== 'undefined') {
-        instance.interceptors.request.eject(cache.requestQueueInterceptorId);
-    }
-    cache.requestQueueInterceptorId = undefined;
     cache.refreshCall = undefined;
     cache.skipInstances = cache.skipInstances.filter((skipInstance) => skipInstance !== instance);
 }

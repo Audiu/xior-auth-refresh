@@ -50,6 +50,10 @@ export default function createAuthRefreshInterceptor(
         requestQueueInterceptorId: undefined,
     };
 
+    // Install one stable gate before requests begin. Moving an interceptor to the
+    // front while xior is iterating REQI can repeat or skip handlers on in-flight requests.
+    createRequestQueueInterceptor(instance, cache, mergedOptions);
+
     return instance.interceptors.response.use(
         (response) => response,
         (error) => {
@@ -70,9 +74,6 @@ export default function createAuthRefreshInterceptor(
 
             // If refresh call does not exist, create one
             const refreshing = createRefreshCall(error, refreshAuthCall, cache);
-
-            // Create interceptor that will bind all the others requests until refreshAuthCall is resolved
-            createRequestQueueInterceptor(instance, cache, mergedOptions);
 
             return refreshing
                 .then(() => {

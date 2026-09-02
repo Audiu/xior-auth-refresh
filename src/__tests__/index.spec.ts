@@ -256,11 +256,11 @@ describe('refresh and queue primitives', () => {
         expect(fetch.mock.calls[0][0]).toBe('/changed');
     });
 
-    it('clears queue and pause state idempotently', () => {
+    it('clears refresh and pause state while keeping the stable queue interceptor', () => {
         const { instance } = createInstance(async () => response(200));
         const cache = createCache({ skipInstances: [instance] });
         cache.refreshCall = Promise.resolve();
-        cache.requestQueueInterceptorId = instance.interceptors.request.use((config) => config);
+        const queueInterceptor = createRequestQueueInterceptor(instance, cache, {});
 
         unsetCache(instance, cache);
         unsetCache(instance, cache);
@@ -268,9 +268,9 @@ describe('refresh and queue primitives', () => {
         expect(cache).toEqual({
             skipInstances: [],
             refreshCall: undefined,
-            requestQueueInterceptorId: undefined,
+            requestQueueInterceptorId: queueInterceptor,
         });
-        expect(instance.REQI).toHaveLength(0);
+        expect(instance.REQI).toEqual([queueInterceptor]);
     });
 
     it('selects the configured retry instance', () => {
@@ -365,6 +365,52 @@ describe('xior 0.8 authentication refresh integration', () => {
         expect(fetch).toHaveBeenCalledTimes(requestCount * 2 + 1);
         expect(onRetry).toHaveBeenCalledTimes(requestCount + 1);
         expect(tokenInterceptor).toHaveBeenCalledTimes(requestCount * 2 + 1);
+    });
+
+    it('does not reorder request interceptors while another request is awaiting one', async () => {
+        let token = 'expired';
+        const slowInterceptorEntered = deferred<void>();
+        const releaseSlowInterceptor = deferred<void>();
+        const refreshStarted = deferred<void>();
+        const releaseRefresh = deferred<void>();
+        const interceptorRuns = new Map<string, number>();
+        const { instance, fetch } = createInstance(async (_input, init) =>
+            init.headers.authorization === 'fresh' ? response(200) : response(401),
+        );
+
+        instance.interceptors.request.use(async (config) => {
+            const run = (interceptorRuns.get(config.url) || 0) + 1;
+            interceptorRuns.set(config.url, run);
+            if (config.url === '/slow' && run === 1) {
+                slowInterceptorEntered.resolve();
+                await releaseSlowInterceptor.promise;
+            }
+            return config;
+        });
+        installTokenHeader(instance, () => token);
+        createAuthRefreshInterceptor(instance, async () => {
+            refreshStarted.resolve();
+            await releaseRefresh.promise;
+            token = 'fresh';
+        });
+
+        const slowRequest = instance.get('/slow');
+        await slowInterceptorEntered.promise;
+        const refreshTrigger = instance.get('/trigger');
+        await refreshStarted.promise;
+
+        releaseSlowInterceptor.resolve();
+        await nextTurn();
+        expect(interceptorRuns.get('/slow')).toBe(1);
+
+        releaseRefresh.resolve();
+        await expect(Promise.all([slowRequest, refreshTrigger])).resolves.toEqual([
+            expect.objectContaining({ status: 200 }),
+            expect.objectContaining({ status: 200 }),
+        ]);
+        expect(interceptorRuns.get('/slow')).toBe(2);
+        expect(interceptorRuns.get('/trigger')).toBe(2);
+        expect(fetch).toHaveBeenCalledTimes(4);
     });
 
     it('pauses new requests while allowing an already in-flight failure to reject', async () => {
