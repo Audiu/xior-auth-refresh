@@ -22,7 +22,7 @@
 - Does not treat cancellation or timeout errors as network-authentication failures. Raw fetch errors without request
   configuration are returned unchanged because they cannot be replayed safely.
 - Remains compatible with xior's `error-retry` plugin when authentication responses are excluded from that plugin;
-  see [Retry plugin composition](README.md#retry-plugin-composition).
+  see [Retry plugin composition](README.md#composing-with-xiors-error-retry-plugin).
 
 ### Verification and tooling
 
@@ -44,8 +44,8 @@
 2. Treat the value returned by `createAuthRefreshInterceptor` as an ejector function. Call it to remove both installed
    interceptors.
 3. If xior's `error-retry` plugin is enabled, exclude authentication statuses as shown in
-   [Retry plugin composition](README.md#retry-plugin-composition), leaving authentication replay ownership with this
-   package.
+   [Retry plugin composition](README.md#composing-with-xiors-error-retry-plugin), leaving authentication replay
+   ownership with this package.
 4. If a refresh request uses the intercepted instance, set `skipAuthRefresh: true` on that request. A separate refresh
    instance does not need this flag.
 5. If `interceptNetworkError` is enabled for a custom transport, ensure rejected errors include the originating xior
