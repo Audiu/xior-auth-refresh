@@ -329,6 +329,22 @@ describe('xior 0.8 authentication refresh integration', () => {
         expect(fetch.mock.calls.map((call) => call[1].headers.authorization)).toEqual(['expired', 'fresh']);
     });
 
+    it('allows the refresh callback to use the intercepted instance', async () => {
+        let token = 'expired';
+        const { instance, fetch } = createInstance(async (input, init) => {
+            if (input === '/auth/refresh') {
+                token = 'fresh';
+                return response(200);
+            }
+            return init.headers.authorization === 'fresh' ? response(200) : response(401);
+        });
+        installTokenHeader(instance, () => token);
+        createAuthRefreshInterceptor(instance, () => instance.post('/auth/refresh'));
+
+        await expect(instance.get('/protected')).resolves.toMatchObject({ status: 200 });
+        expect(fetch.mock.calls.map((call) => call[0])).toEqual(['/protected', '/auth/refresh', '/protected']);
+    });
+
     it('deduplicates a concurrent wave and stalls requests arriving during refresh', async () => {
         const requestCount = 25;
         let token = 'expired';

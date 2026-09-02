@@ -84,15 +84,21 @@ export function createRefreshCall(
     cache: XiorAuthRefreshCache,
 ): Promise<any> {
     if (!cache.refreshCall) {
-        // Assign the promise before invoking user code so concurrent failures always
-        // share one refresh cycle, including when the callback throws synchronously.
-        cache.refreshCall = Promise.resolve().then(() => {
+        try {
+            // Invoke the callback before publishing its promise to the request gate.
+            // This lets a refresh request started with the intercepted instance pass
+            // through before subsequent requests are queued behind it.
             const refreshCall = fn(error);
             if (!refreshCall || typeof refreshCall.then !== 'function') {
-                throw new TypeError('xior-auth-refresh requires `refreshAuthCall` to return a promise.');
+                cache.refreshCall = Promise.reject(
+                    new TypeError('xior-auth-refresh requires `refreshAuthCall` to return a promise.'),
+                );
+            } else {
+                cache.refreshCall = refreshCall;
             }
-            return refreshCall;
-        });
+        } catch (error) {
+            cache.refreshCall = Promise.reject(error);
+        }
     }
     return cache.refreshCall;
 }
