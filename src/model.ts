@@ -1,4 +1,4 @@
-import { XiorError, XiorInstance, XiorRequestConfig } from 'xior';
+import { XiorError, XiorInstance, XiorInterceptorRequestConfig, XiorRequestConfig } from 'xior';
 
 export interface XiorAuthRefreshOptions {
     statusCodes?: Array<number>;
@@ -10,22 +10,16 @@ export interface XiorAuthRefreshOptions {
     shouldRefresh?(error: XiorError): boolean;
     retryInstance?: XiorInstance;
     interceptNetworkError?: boolean;
-    pauseInstanceWhileRefreshing?: boolean;
-    onRetry?: (requestConfig: XiorRequestConfig) => XiorRequestConfig | Promise<XiorRequestConfig>;
-
-    /**
-     * @deprecated
-     * This flag has been deprecated in favor of `pauseInstanceWhileRefreshing` flag.
-     * Use `pauseInstanceWhileRefreshing` instead.
-     */
-    skipWhileRefreshing?: boolean;
+    onRetry?: (
+        requestConfig: XiorInterceptorRequestConfig,
+    ) => XiorInterceptorRequestConfig | Promise<XiorInterceptorRequestConfig>;
 }
 
 export interface XiorAuthRefreshCache {
-    skipInstances: XiorInstance[];
     refreshCall: Promise<any> | undefined;
-    requestQueueInterceptorId: any;
 }
+
+export type XiorAuthRefreshEjector = () => void;
 
 export interface XiorAuthRefreshRequestConfig extends XiorRequestConfig {
     skipAuthRefresh?: boolean;

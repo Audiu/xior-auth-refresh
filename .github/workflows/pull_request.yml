@@ -7,16 +7,22 @@ on:
     workflow_dispatch:
 
 jobs:
-    npm_script_validation:
-        name: npm script validation
+    validation:
+        name: Node ${{ matrix.node-version }}
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
         strategy:
+            fail-fast: false
             matrix:
-                script: [typescript, test]
+                node-version: [20, 22, 24]
         steps:
-            - uses: actions/checkout@v3
-            - uses: actions/setup-node@v3.6.0
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
               with:
-                  node-version: 16
-            - run: npm i
-            - run: npm run ${{ matrix.script }}
+                  node-version: ${{ matrix.node-version }}
+                  cache: npm
+            - run: npm ci --ignore-scripts
+            - run: npm audit --audit-level=high
+            - run: npm run check
+            - run: npm pack --dry-run --ignore-scripts
